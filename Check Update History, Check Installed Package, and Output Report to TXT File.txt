@@ -1,0 +1,98 @@
+<#====================================================================================================================
+Notes:
+	- The script checks the update history and checks if update KB5044273 is already installed.
+	- If the update is already installed, it outputs a message to the console and adds a line to the output file.
+	- If the update is not installed, it outputs a message to the console and adds a line to the output file.
+	- If the computer is offline, it outputs a message to the console and adds a line to the output file.
+Tips:
+	- Make sure to update the output file path as needed.
+	- Test the script on a small group of computers before running it on a larger scale.
+	- Use the -WhatIf parameter to simulate the script's actions without making changes.
+
+Check below if you want to run locally. different script below.
+=====================================================================================================================#>
+
+
+# Define the list of computers
+$computers = Get-Content "$Home\Desktop\KBInstaller.txt"
+
+# Define the update to check
+$updateKB = "5044273"
+
+# Define the output file path
+$outputFilePath = "C:\KB\UpdateReport.txt"
+
+# Create the output file if it doesn't exist
+if (!(Test-Path -Path $outputFilePath)) {
+    New-Item -Path $outputFilePath -ItemType File
+}
+
+# Loop through computers
+foreach ($computer in $computers) {
+    Write-Host "Running on $computer"
+
+    # Check if computer is online
+    if (Test-Connection -ComputerName $computer -Quiet) {
+        # Get update history
+        $updateHistory = Invoke-Command -ComputerName $computer -ScriptBlock {
+            $Session = New-Object -ComObject "Microsoft.Update.Session"
+            $Searcher = $Session.CreateUpdateSearcher()
+            $Searcher.QueryHistory(0, $Searcher.GetTotalHistoryCount()) |
+            Select-Object @{name="KB"; expression={(Select-String -InputObject $_.title -Pattern "(\(\w+\))").matches[0].Value.Replace("(", "").Replace(")", "")}}, @{name="Status"; expression={switch($_.resultcode){
+                1 {"In Progress"}
+                2 {"Succeeded"}
+                3 {"Succeeded With Errors"}
+                4 {"Failed"}; 5 {"Aborted"} }}}, Date
+        }
+
+        # Check if update KB5044273 is already installed
+        $updateInstalled = $updateHistory | Where-Object { $_.KB -eq $updateKB }
+
+        if ($updateInstalled) {
+            Write-Host "Update $updateKB is already installed on $computer."
+            Add-Content -Path $outputFilePath -Value "Update $updateKB is already installed on $computer."
+        } else {
+            Write-Host "Update $updateKB is not installed on $computer."
+            Add-Content -Path $outputFilePath -Value "Update $updateKB is not installed on $computer."
+        }
+    } else {
+        Write-Host "Computer $computer is offline!"
+        Add-Content -Path $outputFilePath -Value "Computer $computer is offline!"
+    }
+}
+
+<#=====================================================================================================================
+Running the Script Locally on a PC
+	Remove the Invoke-Command cmdlet, which is used to run commands remotely.
+	Remove the -ComputerName parameter, which specifies the remote computer.
+	Use the Get-WindowsUpdate cmdlet instead of Microsoft.Update.Session to get the update history.
+Tips:
+	Make sure to run PowerShell as an administrator to ensure the script has the necessary permissions.
+	Update the output file path as needed.
+	Test the script on a small group of PCs before running it on a larger scale.
+======================================================================================================================#>
+
+# Define the update to check
+$updateKB = "5044273"
+
+# Define the output file path
+$outputFilePath = "C:\KB\UpdateReport.txt"
+
+# Create the output file if it doesn't exist
+if (!(Test-Path -Path $outputFilePath)) {
+    New-Item -Path $outputFilePath -ItemType File
+}
+
+# Get update history
+$updateHistory = Get-WindowsUpdate
+
+# Check if update KB5044273 is already installed
+$updateInstalled = $updateHistory | Where-Object { $_.KB -eq $updateKB }
+
+if ($updateInstalled) {
+    Write-Host "Update $updateKB is already installed."
+    Add-Content -Path $outputFilePath -Value "Update $updateKB is already installed."
+} else {
+    Write-Host "Update $updateKB is not installed."
+    Add-Content -Path $outputFilePath -Value "Update $updateKB is not installed."
+}
